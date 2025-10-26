@@ -1,39 +1,64 @@
-# Nom de l'exécutable
-NAME = scop
+# ----- Projet -----
+NAME    = scop
+CC      = cc
+CFLAGS  = -Wall -Wextra -Werror
+SRC     = main.c
+OBJ     = $(SRC:.c=.o)
 
-# Compilateur et options
-CC = cc
-CFLAGS = -Wall -Wextra -Werror
+# ----- Backend OpenGL -----
+# Choisis: glfw (par défaut) ou glut
+BACKEND ?= glfw
 
-# Fichiers sources
-SRC = main.c
-OBJ = $(SRC:.c=.o)
+# On utilise pkg-config pour récupérer les bons flags
+PKGCONFIG = pkg-config
 
-# Chemin vers la MiniLibX
-MLX_DIR = minilibx
-MLX = $(MLX_DIR)/libmlx.a
+ifeq ($(BACKEND),glfw)
+PKGS    = glfw3 glew
+CFLAGS += $(shell $(PKGCONFIG) --cflags $(PKGS))
+LDLIBS  = $(shell $(PKGCONFIG) --libs $(PKGS)) -lGL -lm
+else ifeq ($(BACKEND),glut)
+PKGS    = glut
+CFLAGS += $(shell $(PKGCONFIG) --cflags $(PKGS))
+LDLIBS  = $(shell $(PKGCONFIG) --libs $(PKGS)) -lGL -lm
+else
+$(error BACKEND must be 'glfw' or 'glut')
+endif
 
-# Librairies nécessaires (selon ton OS)
-# Pour Linux :
-LIBS = -L$(MLX_DIR) -lmlx -lXext -lX11 -lm
-
-# Pour macOS (remplace LIBS ci-dessus par celui-ci) :
-# LIBS = -L$(MLX_DIR) -lmlx -framework OpenGL -framework AppKit
-
-# Règle par défaut
+# ----- Règles -----
 all: $(NAME)
 
 $(NAME): $(OBJ)
-	@make -C $(MLX_DIR)
-	$(CC) $(CFLAGS) -o $(NAME) $(OBJ) $(LIBS)
+	$(CC) $(OBJ) -o $@ $(LDLIBS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -f $(OBJ)
-	@make -C $(MLX_DIR) clean
 
 fclean: clean
 	rm -f $(NAME)
 
 re: fclean all
 
-.PHONY: all clean fclean re
+# ----- Aide -----
+.PHONY: all clean fclean re deps run help
+help:
+	@echo "make                -> build (BACKEND=$(BACKEND))"
+	@echo "make BACKEND=glfw   -> build avec GLFW+GLEW"
+	@echo "make BACKEND=glut   -> build avec FreeGLUT (legacy)"
+	@echo "make deps           -> installe les dépendances Ubuntu"
+	@echo "make run            -> lance ./$(NAME)"
+
+# Installe les paquets nécessaires (Ubuntu/Debian)
+deps:
+	sudo apt update
+	sudo apt install -y build-essential pkg-config libgl1-mesa-dev
+	@if [ "$(BACKEND)" = "glfw" ]; then \
+		sudo apt install -y libglfw3-dev libglew-dev; \
+	else \
+		sudo apt install -y freeglut3-dev; \
+	fi
+
+run: all
+	./$(NAME)
